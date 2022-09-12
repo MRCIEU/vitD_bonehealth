@@ -1,0 +1,414 @@
+---
+title: "vitD normalization by clinic+year and SEASON"
+author: "David Hughes"
+date: "2022-08-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(mgcv)
+library(patchwork)
+
+## Load Parameter Data
+source("parameters/pfile.txt")
+## Load data
+f = paste0(datadir, working_data_file_newcolnames)
+mydata = read.table(f, header = TRUE, sep = "\t", as.is = TRUE)
+```
+
+
+# Data Filtering
+
+## Remove those with no genetic data
+
+```{r}
+w = which( is.na( mydata$pgs ) )
+mydata = mydata[-w, ]
+dim(mydata)
+```
+## Keep those with VitD data in at least ONE clinic
+
+```{r}
+## Turn all the negative values into NAs
+temp = mydata[, c("VitDt_FOM1","VitDt_FOM2","VitDt_FOM3","VitDt_FOM4")]
+temp[temp<0] = NA
+mydata[, c("VitDt_FOM1","VitDt_FOM2","VitDt_FOM3","VitDt_FOM4")] = temp
+
+## For each individual how many clinics do they have no data for?
+no_data_count = apply(mydata[, c("VitDt_FOM1","VitDt_FOM2",
+                 "VitDt_FOM3","VitDt_FOM4")], 1, function(x){
+  sum( is.na(x) , na.rm = TRUE )
+})
+
+## Remove those sample where no_data_count == 4
+## indicating that there is no data in any one of the 4 clinics
+w = which(no_data_count == 4)
+if(length(w)>0){ mydata = mydata[-w,] }
+dim(mydata)
+```
+
+# BUILD A SEASON Factor Variable
+
+## remove negative values for month
+
+```{r}
+mydata$month_attended_FOM1[mydata$month_attended_FOM1 < 0] = NA
+mydata$month_attended_FOM2[mydata$month_attended_FOM2 < 0] = NA
+mydata$month_attended_FOM3[mydata$month_attended_FOM3 < 0] = NA
+mydata$month_attended_FOM4[mydata$month_attended_FOM4 < 0] = NA
+
+mydata$year_attended_FOM1[mydata$year_attended_FOM1 < 0] = NA
+mydata$year_attended_FOM2[mydata$year_attended_FOM2 < 0] = NA
+mydata$year_attended_FOM3[mydata$year_attended_FOM3 < 0] = NA
+mydata$year_attended_FOM4[mydata$year_attended_FOM4 < 0] = NA
+
+```
+
+
+## FOM1
+
+```{r}
+## Build a season variable
+r = which( is.na(mydata$month_attended_FOM1) )
+
+mydata$FOM1_season = "autumn"
+
+w = which(mydata$month_attended_FOM1>=1 & mydata$month_attended_FOM1<=3)
+mydata$FOM1_season[w] = "winter"
+
+w = which(mydata$month_attended_FOM1>=4 & mydata$month_attended_FOM1<=6)
+mydata$FOM1_season[w] = "spring"
+
+w = which(mydata$month_attended_FOM1>=7 & mydata$month_attended_FOM1<=10)
+mydata$FOM1_season[w] = "summer"
+
+if(length(r)>0){mydata$FOM1_season[r] = NA}
+
+table(mydata$FOM1_season)
+```
+
+## FOM2
+
+```{r}
+## Build a season variable
+r = which( is.na(mydata$month_attended_FOM2) )
+
+mydata$FOM2_season = "autumn"
+
+w = which(mydata$month_attended_FOM2>=1 & mydata$month_attended_FOM2<=3)
+mydata$FOM2_season[w] = "winter"
+
+w = which(mydata$month_attended_FOM2>=4 & mydata$month_attended_FOM2<=6)
+mydata$FOM2_season[w] = "spring"
+
+w = which(mydata$month_attended_FOM2>=7 & mydata$month_attended_FOM2<=10)
+mydata$FOM2_season[w] = "summer"
+
+if(length(r)>0){mydata$FOM2_season[r] = NA}
+
+table(mydata$FOM2_season)
+```
+
+## FOM3
+
+```{r}
+## Build a season variable
+r = which( is.na(mydata$month_attended_FOM3) )
+
+mydata$FOM3_season = "autumn"
+
+w = which(mydata$month_attended_FOM3>=1 & mydata$month_attended_FOM3<=3)
+mydata$FOM3_season[w] = "winter"
+
+w = which(mydata$month_attended_FOM3>=4 & mydata$month_attended_FOM3<=6)
+mydata$FOM3_season[w] = "spring"
+
+w = which(mydata$month_attended_FOM3>=7 & mydata$month_attended_FOM3<=10)
+mydata$FOM3_season[w] = "summer"
+
+if(length(r)>0){mydata$FOM3_season[r] = NA}
+
+table(mydata$FOM3_season)
+```
+
+
+## FOM4
+
+```{r}
+## Build a season variable
+r = which( is.na(mydata$month_attended_FOM4) )
+
+mydata$FOM4_season = "autumn"
+
+w = which(mydata$month_attended_FOM4>=1 & mydata$month_attended_FOM4<=3)
+mydata$FOM4_season[w] = "winter"
+
+w = which(mydata$month_attended_FOM4>=4 & mydata$month_attended_FOM4<=6)
+mydata$FOM4_season[w] = "spring"
+
+w = which(mydata$month_attended_FOM4>=7 & mydata$month_attended_FOM4<=10)
+mydata$FOM4_season[w] = "summer"
+
+if(length(r)>0){mydata$FOM4_season[r] = NA}
+
+table(mydata$FOM4_season)
+```
+## order the SEASON factor
+
+```{r}
+mydata$FOM1_season = factor(mydata$FOM1_season, levels = c("winter","spring","summer","autumn"))
+mydata$FOM2_season = factor(mydata$FOM2_season, levels = c("winter","spring","summer","autumn"))
+mydata$FOM3_season = factor(mydata$FOM3_season, levels = c("winter","spring","summer","autumn"))
+mydata$FOM4_season = factor(mydata$FOM4_season, levels = c("winter","spring","summer","autumn"))
+```
+
+
+
+## Long Format Data
+
+```{r}
+fom1 = mydata[, c("aln", "month_attended_FOM1", "year_attended_FOM1", "FOM1_season", "VitDt_FOM1" )  ]
+fom1$clinic = "FOM1"
+colnames(fom1) = c("aln","month","year","season","vitD","clinic")
+
+fom2 = mydata[, c("aln", "month_attended_FOM2", "year_attended_FOM2", "FOM2_season", "VitDt_FOM2" )  ]
+fom2$clinic = "FOM2"
+colnames(fom2) = c("aln","month","year","season","vitD","clinic")
+
+fom3 = mydata[, c("aln", "month_attended_FOM3", "year_attended_FOM3", "FOM3_season", "VitDt_FOM3" )  ]
+fom3$clinic = "FOM3"
+colnames(fom3) = c("aln","month","year","season","vitD","clinic")
+
+fom4 = mydata[, c("aln", "month_attended_FOM4", "year_attended_FOM4", "FOM4_season", "VitDt_FOM4" )  ]
+fom4$clinic = "FOM4"
+colnames(fom4) = c("aln","month","year","season","vitD","clinic")
+
+long_data = rbind(fom1, fom2, fom3, fom4)
+```
+
+
+## S.Burgess VitD Seasonal Correction BUT carried out by clinic
+
+### FOM1
+
+```{r}
+## FOM1
+temp_FOM1 = long_data %>% filter(clinic == "FOM1")
+## Fit the default model
+# fit = lm(vitD ~ season, data = temp_FOM1 )
+fit = lm(vitD ~ as.factor(year) * season, data = temp_FOM1 )
+## Fitted values
+fit_ests = fitted(fit)
+m = match(rownames(temp_FOM1), names(fit_ests))
+## Seasonal Correction
+# autumn_avg = predict(fit, newdata = list( season = "autumn") )
+autumn_avg = predict(fit, newdata = list(year = 2009, season = "autumn") )
+## Normalized vitD Estimates
+temp_FOM1$vitD_normalized = (temp_FOM1$vitD - fit_ests[m]) + c(autumn_avg)
+
+```
+
+
+### FOM2
+
+```{r}
+## FOM2
+temp_FOM2 = long_data %>% filter(clinic == "FOM2")
+## Fit the default model
+# fit = lm(vitD ~  season, data = temp_FOM2 )
+fit = lm(vitD ~ as.factor(year) * season, data = temp_FOM2 )
+## Fitted values
+fit_ests = fitted(fit)
+m = match(rownames(temp_FOM2), names(fit_ests))
+## Seasonal Correction
+# autumn_avg = predict(fit, newdata = list(season = "autumn") )
+autumn_avg = predict(fit, newdata = list( year = 2012, season = "autumn") )
+## Normalized vitD Estimates
+temp_FOM2$vitD_normalized = (temp_FOM2$vitD - fit_ests[m]) + c(autumn_avg)
+```
+
+
+### FOM3
+
+```{r}
+## FOM3
+temp_FOM3 = long_data %>% filter(clinic == "FOM3")
+## Fit the default model
+fit = lm(vitD ~ season, data = temp_FOM3 )
+## Fitted values
+fit_ests = fitted(fit)
+m = match(rownames(temp_FOM3), names(fit_ests))
+## Seasonal Correction
+autumn_avg = predict(fit, newdata = list(season = "autumn") )
+## Normalized vitD Estimates
+temp_FOM3$vitD_normalized = (temp_FOM3$vitD - fit_ests[m]) + c(autumn_avg)
+```
+
+### FOM4
+
+```{r}
+## FOM4
+temp_FOM4 = long_data %>% filter(clinic == "FOM4")
+## Fit the default model
+fit = lm(vitD ~ season, data = temp_FOM4 )
+## Fitted values
+fit_ests = fitted(fit)
+m = match(rownames(temp_FOM4), names(fit_ests))
+## Seasonal Correction
+autumn_avg = predict(fit, newdata = list(season = "autumn") )
+## Normalized vitD Estimates
+temp_FOM4$vitD_normalized = (temp_FOM4$vitD - fit_ests[m]) + c(autumn_avg)
+```
+
+
+```{r}
+long_data_v2 = rbind(temp_FOM1, temp_FOM2, temp_FOM3, temp_FOM4)
+long_data$vitD_normalized = long_data_v2$vitD_normalized
+```
+
+
+## Normalize by clinic mean
+
+```{r}
+## Fit the  model
+fit = lm(vitD_normalized ~ as.factor(clinic), data = long_data )
+
+## Fitted values
+fit_ests = fitted(fit)
+m = match(rownames(long_data), names(fit_ests))
+
+## Seasonal Correction
+clinic_avg = predict(fit, newdata = list(clinic = "FOM1") )
+
+## Normalized vitD Estimates
+long_data$vitD_normalized_clinic_centered = (long_data$vitD_normalized - fit_ests[m]) + c(clinic_avg)
+```
+
+
+
+
+```{r}
+P1 = long_data %>% ggplot(aes(x = month, y = vitD_normalized_clinic_centered)) +
+  geom_smooth(method = gam, formula = y~s(x), aes(color = clinic) ) +
+  facet_wrap(~clinic) +
+  theme_bw()
+```
+
+```{r, fig.width = 6, fig.height = 5}
+P2 = long_data %>% ggplot(aes(x = season, y = vitD_normalized_clinic_centered)) +
+  geom_boxplot(aes(fill = as.factor(year)) ) +
+  scale_fill_brewer(palette = "Set1") +
+  facet_wrap(~ clinic) +
+  theme_bw() + labs(fill = "year")
+```
+
+
+```{r}
+corplot = function(wdata, clinicA, clinicB, PlotVar = "vitD_shifted" ){
+  pcol = RColorBrewer::brewer.pal(8, "Set1")
+  
+  Adata = wdata %>% filter(clinic == clinicA )
+  Bdata = wdata %>% filter(clinic == clinicB )
+  
+  ## match alns
+  ids = sort( unique( c(Adata$aln, Bdata$aln) )  )
+  
+  m = match(ids, Adata$aln)
+  Adata = Adata[m,]
+  colnames(Adata) = paste0(colnames(Adata), "_", clinicA)
+  
+  m = match(ids, Bdata$aln)
+  Bdata = Bdata[m,]
+  colnames(Bdata) = paste0(colnames(Bdata), "_", clinicB)
+  
+  new_data = cbind(Adata, Bdata)
+  
+  x = paste0(PlotVar, "_", clinicA )
+  y = paste0(PlotVar, "_", clinicB )
+  ## correlation
+  a = cor.test( new_data[, x], new_data[, y] )
+  r = round( a$est, d =  4 )
+  ### plot
+  plot = new_data %>% ggplot(aes_string(x = x, y = y)) +
+    geom_point(shape = 21, fill = pcol[2], size = 1.5, alpha = 0.5) + 
+    geom_abline(intercept = 0, slope = 1, color = "black") +
+    geom_smooth( method = lm, formula = y~x, color = pcol[1]) +
+    # geom_smooth( method = gam, formula = y~s(x), color = pcol[3]) +
+    labs(title = paste0("Pearson's r = ", r) ) +
+    theme_bw()
+  
+  return(plot)
+  
+}
+```
+
+```{r, fig.width = 8, fig.height = 5}
+p1 = corplot(wdata = long_data, clinicA = "FOM1", clinicB = "FOM2", PlotVar = "vitD_normalized_clinic_centered" )
+p2 = corplot(wdata = long_data, clinicA = "FOM1", clinicB = "FOM3", PlotVar = "vitD_normalized_clinic_centered" )
+p3 = corplot(wdata = long_data, clinicA = "FOM1", clinicB = "FOM4", PlotVar = "vitD_normalized_clinic_centered" )
+p4 = corplot(wdata = long_data, clinicA = "FOM2", clinicB = "FOM3", PlotVar = "vitD_normalized_clinic_centered" )
+p5 = corplot(wdata = long_data, clinicA = "FOM2", clinicB = "FOM4", PlotVar = "vitD_normalized_clinic_centered" )
+p6 = corplot(wdata = long_data, clinicA = "FOM3", clinicB = "FOM4", PlotVar = "vitD_normalized_clinic_centered" )
+
+PLOT = (p1 | p2 | p3) / (p4 | p5 | p6)
+```
+
+
+```{r, fig.width = 12, fig.height = 10, warning=FALSE}
+plotout = (P1|P2)/PLOT + plot_layout(heights = c(1, 2))
+plotout
+```
+
+## Write long data to file
+
+```{r}
+f = paste0(datadir, "working_data/vitD_long_data.txt")
+write.table(long_data, file = f, row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
+```
+
+## Add the vitD_normalized_clinic_centered variable to the wide formatted data set
+
+```{r}
+## FOM1
+temp = long_data %>% filter(clinic == "FOM1")
+m = match(mydata$aln, temp$aln)
+mydata$FOM1_vitD_season_and_clinic_centered = temp$vitD_normalized_clinic_centered[m]
+```
+
+```{r}
+## FOM2
+temp = long_data %>% filter(clinic == "FOM2")
+m = match(mydata$aln, temp$aln)
+mydata$FOM2_vitD_season_and_clinic_centered = temp$vitD_normalized_clinic_centered[m]
+```
+
+```{r}
+## FOM3
+temp = long_data %>% filter(clinic == "FOM3")
+m = match(mydata$aln, temp$aln)
+mydata$FOM3_vitD_season_and_clinic_centered = temp$vitD_normalized_clinic_centered[m]
+```
+
+```{r}
+## FOM4
+temp = long_data %>% filter(clinic == "FOM4")
+m = match(mydata$aln, temp$aln)
+mydata$FOM4_vitD_season_and_clinic_centered = temp$vitD_normalized_clinic_centered[m]
+```
+
+## Double Check
+
+```{r}
+cor.test(mydata$FOM1_vitD_season_and_clinic_centered, mydata$FOM2_vitD_season_and_clinic_centered )$estimate
+```
+
+## Write wide data to file
+
+```{r}
+f = paste0(datadir, "working_data/working_data_set_v1.txt")
+write.table(mydata, file = f, row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
+```
+
+

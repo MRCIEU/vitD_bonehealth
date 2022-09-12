@@ -1,0 +1,466 @@
+---
+title: "ALSPAC: VitD & Bone Health Obs and MR Analyses"
+author: "Lucy Goudswaard, Maddy Smith, and David Hughes"
+date: "2022-09-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+
+## Load Parameter Data
+source("parameters/pfile.txt")
+source("functions/stratified_MR.R")
+source("functions/summarize_stratified_MR.R")
+```
+
+#### load the data
+
+```{r}
+## Load data
+f = paste0(datadir, normalized_data_wide_v2)
+mydata = read.table(f, header = TRUE, sep = "\t", as.is = TRUE)
+
+f = paste0(datadir, compiled_analysis_data)
+mydata_compiled = read.table(f, header = TRUE, sep = "\t", as.is = TRUE)
+
+```
+
+
+#### colname edit
+
+```{r}
+w = which( colnames(mydata) == "FOM3_Hip_total_BMD" )
+if(length(w)>0){ colnames(mydata)[w] = "FOM3_Hip_Total_BMD" }
+
+```
+
+#### exposure edit - change units from ng/ml to nmol/l
+
+```{r}
+mydata$FOM1_vitD_nmol_per_l = mydata$FOM1_vitD_season_and_clinic_centered * 2.496
+mydata$FOM2_vitD_nmol_per_l = mydata$FOM2_vitD_season_and_clinic_centered * 2.496
+mydata$FOM3_vitD_nmol_per_l = mydata$FOM3_vitD_season_and_clinic_centered * 2.496
+mydata$FOM4_vitD_nmol_per_l = mydata$FOM4_vitD_season_and_clinic_centered * 2.496
+#######
+mydata_compiled$vitD_nmol_per_l = mydata_compiled$vitD_season_and_clinic_centered * 2.496
+```
+
+
+## What is the variance explined in VitD by the PGS in each clinic ?
+
+```{r}
+fit = lm(FOM1_vitD_season_and_clinic_centered ~ pgs, data = mydata)
+summary(fit)$r.sq
+
+fit = lm(FOM2_vitD_season_and_clinic_centered ~ pgs, data = mydata)
+summary(fit)$r.sq
+
+fit = lm(FOM3_vitD_season_and_clinic_centered ~ pgs, data = mydata)
+summary(fit)$r.sq
+
+fit = lm(FOM4_vitD_season_and_clinic_centered ~ pgs, data = mydata)
+summary(fit)$r.sq
+
+fit = lm(vitD_season_and_clinic_centered ~ pgs, data = mydata_compiled)
+summary(fit)$r.sq
+
+```
+
+
+### Check for negative values in age_at_FOM1
+
+```{r}
+w = which( mydata[, "age_at_FOM1"] < 0 ); if(length(w)>0){ mydata[ w , "age_at_FOM1"] = NA }
+```
+
+
+## (I) VitD and Total Neck Bone Mineral Density in mothers (FOM1 only)
+
+```{r}
+FOM1_VitD_Neck_BMD_Analysis = stratified_MR(wdata = mydata,
+                                  exposure = "FOM1_vitD_nmol_per_l", 
+                                  outcome = "FOM1_Hip_Neck_BMD",
+                                  instrument = "pgs",
+                                  covariables = c("age_at_FOM1", paste0("PC", 1:10)),
+                                  strata_breaks = c(0,25,50,75,Inf),
+                                  strata_breaks_v2 = NULL)
+
+summ_FOM1_VitD_Neck_BMD_Analysis <- summarize_stratified_MR(FOM1_VitD_Neck_BMD_Analysis)
+
+# summ_FOM1_VitD_Neck_BMD_Analysis
+```
+
+```{r}
+summ_FOM1_VitD_Neck_BMD_Analysis[[1]] %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+```{r}
+summ_FOM1_VitD_Neck_BMD_Analysis[[2]] %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+## Vitamin D and BMD with narrow categories (FOM1 only)
+
+```{r}
+FOM1_VitD_Neck_BMD_Analysis_narrow = stratified_MR(wdata = mydata,
+                                  exposure = "FOM1_vitD_nmol_per_l", 
+                                  outcome = "FOM1_Hip_Neck_BMD",
+                                  instrument = "pgs",
+                                  covariables = c("age_at_FOM1", paste0("PC", 1:10)),
+                                  strata_breaks = c(0,20,30,40, 50, 60, 70, Inf),
+                                  strata_breaks_v2 = NULL)
+summ_FOM1_VitD_Neck_BMD_Analysis_narrow <- summarize_stratified_MR(FOM1_VitD_Neck_BMD_Analysis_narrow)
+# summ_FOM1_VitD_Neck_BMD_Analysis_narrow
+```
+
+```{r}
+summ_FOM1_VitD_Neck_BMD_Analysis_narrow[[1]] %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+```{r}
+summ_FOM1_VitD_Neck_BMD_Analysis_narrow[[2]] %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+### Table 1 - Vitamin D and bone mineral density
+
+```{r}
+results_table <- as.data.frame(matrix(ncol=6, nrow=12))
+colnames(results_table) <- c("Vitamin D category", "bx", "bxse", "by", "byse", "N")
+results_table[,1] <- c("Overall population", "<25 nmol/L", '25-49 nmol/L','50-74 nmol/L', '>75 nmol/L','<20 nmol/L','20-29 nmol/L','30-39 nmol/L','40-49 nmol/L','50-59 nmol/L','60-69 nmol/L','>70 nmol/L')
+results_table[1:5,2] <- summ_FOM1_VitD_Neck_BMD_Analysis$effect_ests[,4]
+results_table[6:12,2] <- summ_FOM1_VitD_Neck_BMD_Analysis_narrow$effect_ests[2:8,4]
+results_table[1:5,3] <- summ_FOM1_VitD_Neck_BMD_Analysis$effect_ests[,5]
+results_table[6:12,3] <- summ_FOM1_VitD_Neck_BMD_Analysis_narrow$effect_ests[2:8,5]
+results_table[1:5,4] <- summ_FOM1_VitD_Neck_BMD_Analysis$effect_ests[,7]
+results_table[6:12,4] <- summ_FOM1_VitD_Neck_BMD_Analysis_narrow$effect_ests[2:8,7]
+results_table[1:5,5] <- summ_FOM1_VitD_Neck_BMD_Analysis$effect_ests[,8]
+results_table[6:12,5] <- summ_FOM1_VitD_Neck_BMD_Analysis_narrow$effect_ests[2:8,8]
+results_table[1:5,6] <- summ_FOM1_VitD_Neck_BMD_Analysis$exposure_outcome_ss[,1]
+results_table[6:12,6] <- summ_FOM1_VitD_Neck_BMD_Analysis_narrow$exposure_outcome_ss[2:8,1]
+
+results_table %>% knitr::kable() %>% kableExtra::kable_classic()
+
+```
+
+
+```{r, echo = FALSE}
+f = paste0(resultsdir, "ALSPAC_BMD_results.txt")
+write.table(results_table, file = f, row.names = FALSE, col.names = TRUE, sep = "\t", quote = TRUE)
+```
+
+
+## (II) Vitamin D and "Ever had a bone fracture" (FOM1 only)
+
+```{r}
+mydata$ever_fracture = factor(mydata$ever_fracture, levels = c("no","yes"))
+FOM1_VitD_ever_fracture = stratified_MR(wdata = mydata,
+                                  exposure = "FOM1_vitD_nmol_per_l", 
+                                  outcome = "ever_fracture",
+                                  instrument = "pgs",
+                                  covariables = c("age_at_FOM1", paste0("PC", 1:10)),
+                                  strata_breaks = c(0,25,50,75,Inf),
+                                  strata_breaks_v2 = NULL)
+summ_FOM1_VitD_ever_fracture <- summarize_stratified_MR(FOM1_VitD_ever_fracture)
+# summ_FOM1_VitD_ever_fracture
+
+```
+
+
+```{r}
+summ_FOM1_VitD_ever_fracture[[1]] %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+
+```{r}
+summ_FOM1_VitD_ever_fracture[[2]] %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+
+## Vitamin D and ever fracture - narrow vitamin D strata (FOM1)
+
+```{r, warning=FALSE}
+FOM1_VitD_ever_fracture_narrow = stratified_MR(wdata = mydata,
+                                  exposure = "FOM1_vitD_nmol_per_l", 
+                                  outcome = "ever_fracture",
+                                  instrument = "pgs",
+                                  covariables = c("age_at_FOM1", paste0("PC", 1:10)),
+                                  strata_breaks = c(0,20,30,40, 50, 60, 70, Inf),
+                                  strata_breaks_v2 = NULL)
+summ_FOM1_VitD_ever_fracture_narrow <- summarize_stratified_MR(FOM1_VitD_ever_fracture_narrow)
+# summ_FOM1_VitD_ever_fracture_narrow
+
+```
+
+
+```{r}
+summ_FOM1_VitD_ever_fracture_narrow[[1]] %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+
+```{r}
+summ_FOM1_VitD_ever_fracture_narrow[[2]] %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+
+### Table 2 - Vitamin D and ever fracture
+
+```{r}
+results_table2 <- as.data.frame(matrix(ncol=6, nrow=12))
+colnames(results_table2) <- c("Vitamin D category", "bx", "bxse", "by", "byse", "N")
+results_table2[,1] <- c("Overall population", "<25 nmol/L", '25-49 nmol/L','50-74 nmol/L', '>75 nmol/L','<20 nmol/L','20-29 nmol/L','30-39 nmol/L','40-49 nmol/L','50-59 nmol/L','60-69 nmol/L','>70 nmol/L')
+results_table2[1:5,2] <- summ_FOM1_VitD_ever_fracture$effect_ests[,4]
+results_table2[6:12,2] <- summ_FOM1_VitD_ever_fracture_narrow$effect_ests[2:8,4]
+results_table2[1:5,3] <- summ_FOM1_VitD_ever_fracture$effect_ests[,5]
+results_table2[6:12,3] <- summ_FOM1_VitD_ever_fracture_narrow$effect_ests[2:8,5]
+results_table2[1:5,4] <- summ_FOM1_VitD_ever_fracture$effect_ests[,7]
+results_table2[6:12,4] <- summ_FOM1_VitD_ever_fracture_narrow$effect_ests[2:8,7]
+results_table2[1:5,5] <- summ_FOM1_VitD_ever_fracture$effect_ests[,8]
+results_table2[6:12,5] <- summ_FOM1_VitD_ever_fracture_narrow$effect_ests[2:8,8]
+results_table2[1:5,6] <- summ_FOM1_VitD_ever_fracture$exposure_outcome_ss[,1]
+results_table2[6:12,6] <- summ_FOM1_VitD_ever_fracture_narrow$exposure_outcome_ss[2:8,1]
+
+
+```
+
+
+```{r, echo = FALSE}
+f = paste0(resultsdir, "ALSPAC_fracture_results.txt")
+write.table(results_table2, file = f, row.names = FALSE, col.names = TRUE, sep = "\t", quote = TRUE)
+```
+
+
+
+```{r}
+results_table2 %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+## (III) Ever been told you have osteoperosis
+
+#### edit phenotype
+
+```{r}
+table(mydata$ever_told_osteoperosis_2020)
+```
+
+```{r}
+mydata$ever_told_osteoperosis_2020 = as.character(mydata$ever_told_osteoperosis_2020)
+###
+w = which(mydata$ever_told_osteoperosis_2020 == "0")
+mydata$ever_told_osteoperosis_2020[w] = "no"
+
+##
+w = which(mydata$ever_told_osteoperosis_2020 == "1")
+mydata$ever_told_osteoperosis_2020[w] = "yes"
+
+##
+mydata$ever_told_osteoperosis_2020 = factor(mydata$ever_told_osteoperosis_2020, levels = c("no","yes"))
+
+```
+
+
+```{r}
+table(mydata_compiled$ever_told_osteoperosis_2020)
+```
+
+### Vitamin D and osteoporosis with broad strata (FOM1)
+
+```{r, warning=FALSE}
+FOM1_VitD_osteoporosis = stratified_MR(wdata = mydata,
+                                  exposure = "FOM1_vitD_nmol_per_l", 
+                                  outcome = "ever_told_osteoperosis_2020",
+                                  instrument = "pgs",
+                                  covariables = c("age_at_FOM1", paste0("PC", 1:10)),
+                                  strata_breaks = c(0,25,50,75,Inf),
+                                  strata_breaks_v2 = NULL)
+summ_FOM1_VitD_osteoporosis <- summarize_stratified_MR(FOM1_VitD_osteoporosis)
+# summ_FOM1_VitD_osteoporosis
+```
+
+
+```{r}
+summ_FOM1_VitD_osteoporosis[[1]] %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+
+```{r}
+summ_FOM1_VitD_osteoporosis[[2]] %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+
+### Vitamin D and osteoporosis with narrow strata (FOM1)
+
+```{r, warning=FALSE}
+FOM1_VitD_osteoporosis_narrow = stratified_MR(wdata = mydata,
+                                  exposure = "FOM1_vitD_nmol_per_l", 
+                                  outcome = "ever_told_osteoperosis_2020",
+                                  instrument = "pgs",
+                                  covariables = c("age_at_FOM1", paste0("PC", 1:10)),
+                                  strata_breaks = c(0,20,30,40, 50, 60, 70, Inf),
+                                  strata_breaks_v2 = NULL)
+summ_FOM1_VitD_osteoporosis_narrow <- summarize_stratified_MR(FOM1_VitD_osteoporosis_narrow)
+# summ_FOM1_VitD_osteoporosis_narrow
+```
+
+
+```{r}
+summ_FOM1_VitD_osteoporosis_narrow[[1]] %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+
+```{r}
+summ_FOM1_VitD_osteoporosis_narrow[[2]] %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+
+### Table 3 - Vitamin D and osteoporosis
+
+```{r}
+results_table3 <- as.data.frame(matrix(ncol=6, nrow=12))
+colnames(results_table3) <- c("Vitamin D category", "bx", "bxse", "by", "byse", "N")
+results_table3[,1] <- c("Overall population", "<25 nmol/L", '25-49 nmol/L','50-74 nmol/L', '>75 nmol/L','<20 nmol/L','20-29 nmol/L','30-39 nmol/L','40-49 nmol/L','50-59 nmol/L','60-69 nmol/L','>70 nmol/L')
+results_table3[1:5,2] <- summ_FOM1_VitD_osteoporosis$effect_ests[,4]
+results_table3[6:12,2] <- summ_FOM1_VitD_osteoporosis_narrow$effect_ests[2:8,4]
+results_table3[1:5,3] <- summ_FOM1_VitD_osteoporosis$effect_ests[,5]
+results_table3[6:12,3] <- summ_FOM1_VitD_osteoporosis_narrow$effect_ests[2:8,5]
+results_table3[1:5,4] <- summ_FOM1_VitD_osteoporosis$effect_ests[,7]
+results_table3[6:12,4] <- summ_FOM1_VitD_osteoporosis_narrow$effect_ests[2:8,7]
+results_table3[1:5,5] <- summ_FOM1_VitD_osteoporosis$effect_ests[,8]
+results_table3[6:12,5] <- summ_FOM1_VitD_osteoporosis_narrow$effect_ests[2:8,8]
+results_table3[1:5,6] <- summ_FOM1_VitD_osteoporosis$exposure_outcome_ss[,1]
+results_table3[6:12,6] <- summ_FOM1_VitD_osteoporosis_narrow$exposure_outcome_ss[2:8,1]
+
+```
+
+
+```{r, echo = FALSE}
+f = paste0(resultsdir, "ALSPAC_osteoporosis_results.txt")
+write.table(results_table3, file = f, row.names = FALSE, col.names = TRUE, sep = "\t", quote = TRUE)
+```
+
+
+```{r}
+results_table3 %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+
+#### Remove remaining negative responses (change to NA)
+
+```{r}
+w = which(mydata$age_at_FOM1 < 0 )
+if(length(w)>0){ mydata$age_at_FOM1[w] = NA  }
+w = which(mydata$bmi_at_FOM1 < 0 )
+if(length(w)>0){ mydata$bmi_at_FOM1[w] = NA  }
+w = which(mydata$FOM1_Hip_Neck_BMD < 0 )
+if(length(w)>0){ mydata$FOM1_Hip_Neck_BMD[w] = NA  }
+```
+
+
+## Table of descriptives
+
+column for each analysis 'BMD population', 'Fracture population', 'Osteoporosis population'
+and column for everyone who had VitD data at FOM1
+
+```{r, echo = FALSE}
+study_characteristics <- as.data.frame(matrix(ncol=6, nrow=20))
+colnames(study_characteristics) <- c("Characteristic", "BMD population", "Fracture population", "Osteoporosis population", "Population with VitD data", "vitD population n")
+study_characteristics[,1] <- c("ppts", "age", "season-shifted vitD", "<25 nmol/L", '25-49 nmol/L','50-74 nmol/L', '>75 nmol/L','<20 nmol/L','20-29 nmol/L','30-39 nmol/L','40-49 nmol/L','50-59 nmol/L','60-69 nmol/L','>70 nmol/L', "fracture events", "osteoporosis events", "femoral neck BMD", "BMI", "Never smoker", "Ever smoker")
+study_characteristics[1,2] <- summ_FOM1_VitD_Neck_BMD_Analysis[[1]][1,"n"]
+study_characteristics[4:7,2] <- summ_FOM1_VitD_Neck_BMD_Analysis[[1]][2:5, "n"]
+study_characteristics[8:14,2] <- summ_FOM1_VitD_Neck_BMD_Analysis_narrow[[1]][2:8,"n"]
+study_characteristics[1,3] <- summ_FOM1_VitD_ever_fracture[[1]][1,"n"]
+study_characteristics[4:7,3] <- summ_FOM1_VitD_ever_fracture[[1]][2:5, "n"]
+study_characteristics[8:14,3] <- summ_FOM1_VitD_ever_fracture_narrow[[1]][2:8,"n"]
+study_characteristics[1,4] <- summ_FOM1_VitD_osteoporosis[[1]][1,"n"]
+study_characteristics[4:7,4] <- summ_FOM1_VitD_osteoporosis[[1]][2:5, "n"]
+study_characteristics[8:14,4] <- summ_FOM1_VitD_osteoporosis_narrow[[1]][2:8,"n"]
+# create df with only ppts who have (positive) vitD data at FOM1 - note that some of the characteristics have NAs so N will be different for some mean/SD calculations
+w <- which(is.na(mydata$FOM1_vitD_nmol_per_l)|mydata$FOM1_vitD_nmol_per_l<0)
+mydata_vitd <- mydata[-w,]
+# extract the numbers from this - will probably need to cut the vitd vars to get the categories
+study_characteristics[1,5] <- nrow(mydata_vitd)
+# stratify vit D into broad and narrow
+mydata_vitd$vitD_broad_strata <- cut(mydata_vitd$FOM1_vitD_nmol_per_l, breaks=c(0,25,50,75,Inf), labels = c(1,2,3,4))
+mydata_vitd$vitD_narrow_strata <- cut(mydata_vitd$FOM1_vitD_nmol_per_l, breaks=c(0,20,30,40,50,60,70,Inf), labels = c(1,2,3,4,5,6,7))
+study_characteristics[4:7,5] <- c(sum(mydata_vitd$vitD_broad_strata==1), sum(mydata_vitd$vitD_broad_strata==2),sum(mydata_vitd$vitD_broad_strata==3),sum(mydata_vitd$vitD_broad_strata==4))
+study_characteristics[8:14,5] <- c(sum(mydata_vitd$vitD_narrow_strata==1), sum(mydata_vitd$vitD_narrow_strata==2),sum(mydata_vitd$vitD_narrow_strata==3),sum(mydata_vitd$vitD_narrow_strata==4),sum(mydata_vitd$vitD_narrow_strata==5),sum(mydata_vitd$vitD_narrow_strata==6),sum(mydata_vitd$vitD_narrow_strata==7))
+study_characteristics[15,5] <- length(which(mydata_vitd$ever_fracture=="yes"))
+study_characteristics[16,5] <- length(which(mydata_vitd$ever_told_osteoperosis_2020=="yes"))
+study_characteristics[19,5] <- length(which(mydata_vitd$ever_never_smoked=="no"))
+study_characteristics[20,5] <- length(which(mydata_vitd$ever_never_smoked=="yes"))
+study_characteristics[2,5] <- paste0( round( mean(mydata_vitd$age_at_FOM1),d = 4)," +/- ",
+                                      round( sd(mydata_vitd$age_at_FOM1), d = 4) )
+study_characteristics[3,5] <- paste0( round( mean(mydata_vitd$FOM1_vitD_nmol_per_l),d = 4)," +/- ",
+                                      round( sd(mydata_vitd$FOM1_vitD_nmol_per_l),d = 4) )
+study_characteristics[17,5] <- paste0( round( mean(mydata_vitd$FOM1_Hip_Neck_BMD, na.rm = T),d = 4) ," +/- ",
+                                       round( sd(mydata_vitd$FOM1_Hip_Neck_BMD, na.rm = T), d = 4) )
+study_characteristics[18,5] <- paste0( round( mean(mydata_vitd$bmi_at_FOM1, na.rm = T),d = 4)," +/- ",
+                                       round( sd(mydata_vitd$bmi_at_FOM1, na.rm = T),d = 4) )
+study_characteristics[2,6] <- length(which(!is.na(mydata_vitd$age_at_FOM1)==T))
+study_characteristics[3,6] <- length(which(!is.na(mydata_vitd$FOM1_vitD_nmol_per_l)==T))
+study_characteristics[15,6] <- length(which(!is.na(mydata_vitd$ever_fracture)==T))
+study_characteristics[16,6] <- length(which(!is.na(mydata_vitd$ever_told_osteoperosis_2020)==T))
+study_characteristics[17,6] <- length(which(!is.na(mydata_vitd$FOM1_Hip_Neck_BMD)==T))
+study_characteristics[18,6] <- length(which(!is.na(mydata_vitd$bmi_at_FOM1)==T))
+study_characteristics[19,6] <- length(which(!is.na(mydata_vitd$ever_never_smoked)==T))
+study_characteristics[20,6] <- length(which(!is.na(mydata_vitd$ever_never_smoked)==T))
+# then make a table for each analysis pop - check nrow matches n in the results tables
+# ppts that have no NAs for the outcome, age, pgs, PC1:10 and vitD (so use mydata_vitD)
+# BMD population
+w <- which(is.na(mydata_vitd$FOM1_Hip_Neck_BMD)|is.na(mydata_vitd$age_at_FOM1)|is.na(mydata_vitd$pgs)|is.na(mydata_vitd$PC1))
+bmd_pop <- mydata_vitd[-w,]
+study_characteristics[15,2] <- length(which(bmd_pop$ever_fracture=="yes"))
+study_characteristics[16,2] <- length(which(bmd_pop$ever_told_osteoperosis_2020=="yes"))
+study_characteristics[19,2] <- length(which(bmd_pop$ever_never_smoked=="no"))
+study_characteristics[20,2] <- length(which(bmd_pop$ever_never_smoked=="yes"))
+study_characteristics[2,2] <- paste0(round( mean(bmd_pop$age_at_FOM1),d = 4)," +/- ",
+                                     round( sd(bmd_pop$age_at_FOM1),d = 4) )
+study_characteristics[3,2] <- paste0( round( mean(bmd_pop$FOM1_vitD_nmol_per_l), d = 4)," +/- ",
+                                      round( sd(bmd_pop$FOM1_vitD_nmol_per_l),d = 4) )
+study_characteristics[17,2] <- paste0( round( mean(bmd_pop$FOM1_Hip_Neck_BMD, na.rm = T),d = 4)," +/- ",
+                                       round( sd(bmd_pop$FOM1_Hip_Neck_BMD, na.rm = T),d = 4) )
+study_characteristics[18,2] <- paste0( round( mean(bmd_pop$bmi_at_FOM1, na.rm = T),d = 4)," +/- ",
+                                       round( sd(bmd_pop$bmi_at_FOM1, na.rm = T), d = 4) )
+# fracture population
+w <- which(is.na(mydata_vitd$ever_fracture)|is.na(mydata_vitd$age_at_FOM1)|is.na(mydata_vitd$pgs)|is.na(mydata_vitd$PC1))
+fracture_pop <- mydata_vitd[-w,]
+study_characteristics[15,3] <- length(which(fracture_pop$ever_fracture=="yes"))
+study_characteristics[16,3] <- length(which(fracture_pop$ever_told_osteoperosis_2020=="yes"))
+study_characteristics[19,3] <- length(which(fracture_pop$ever_never_smoked=="no"))
+study_characteristics[20,3] <- length(which(fracture_pop$ever_never_smoked=="yes"))
+study_characteristics[2,3] <- paste0( round( mean(fracture_pop$age_at_FOM1), d = 4)," +/- ",
+                                      round( sd(fracture_pop$age_at_FOM1), d = 4) )
+study_characteristics[3,3] <- paste0( round( mean(fracture_pop$FOM1_vitD_nmol_per_l), d = 4)," +/- ",
+                                      round( sd(fracture_pop$FOM1_vitD_nmol_per_l), d = 4) )
+study_characteristics[17,3] <- paste0( round( mean(fracture_pop$FOM1_Hip_Neck_BMD, na.rm = T), d = 4) ," +/- ",
+                                       round( sd(fracture_pop$FOM1_Hip_Neck_BMD, na.rm = T), d = 4) )
+study_characteristics[18,3] <- paste0( round( mean(fracture_pop$bmi_at_FOM1, na.rm = T),d = 4)," +/- ",
+                                       round( sd(fracture_pop$bmi_at_FOM1, na.rm = T), d = 4) )
+# osteoporosis population
+w <- which(is.na(mydata_vitd$ever_told_osteoperosis_2020)|is.na(mydata_vitd$age_at_FOM1)|is.na(mydata_vitd$pgs)|is.na(mydata_vitd$PC1))
+osteo_pop <- mydata_vitd[-w,]
+study_characteristics[15,4] <- length(which(osteo_pop$ever_fracture=="yes"))
+study_characteristics[16,4] <- length(which(osteo_pop$ever_told_osteoperosis_2020=="yes"))
+study_characteristics[19,4] <- length(which(osteo_pop$ever_never_smoked=="no"))
+study_characteristics[20,4] <- length(which(osteo_pop$ever_never_smoked=="yes"))
+study_characteristics[2,4] <- paste0( round( mean(osteo_pop$age_at_FOM1), d = 3)," +/- ", 
+                                      round(sd(osteo_pop$age_at_FOM1), d = 4) )
+study_characteristics[3,4] <- paste0( round( mean(osteo_pop$FOM1_vitD_nmol_per_l), d = 4)," +/- ", 
+                                      round( sd(osteo_pop$FOM1_vitD_nmol_per_l), d = 4 ) )
+study_characteristics[17,4] <- paste0( round(mean(osteo_pop$FOM1_Hip_Neck_BMD, na.rm = T),d = 4)," +/- ", 
+                                       round( sd(osteo_pop$FOM1_Hip_Neck_BMD, na.rm = T), d = 4) )
+study_characteristics[18,4] <- paste0( round( mean(osteo_pop$bmi_at_FOM1, na.rm = T), d = 4)," +/- ",
+                                       round( sd(osteo_pop$bmi_at_FOM1, na.rm = T), d = 4) )
+```
+
+```{r, echo = FALSE}
+f = paste0(resultsdir, "ALSPAC_Study_Characteristics.txt")
+write.table(study_characteristics, file = f, row.names = FALSE, col.names = TRUE, sep = "\t", quote = TRUE)
+```
+
+
+```{r}
+study_characteristics %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+
+

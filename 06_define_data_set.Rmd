@@ -1,0 +1,214 @@
+---
+title: "Define Data Sets for Obs and MR Analyses"
+author: "David Hughes"
+date: "2022-08-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(patchwork)
+
+## Load Parameter Data
+source("parameters/pfile.txt")
+source("functions/id_sample_pool.R")
+source("functions/build_data_set.R")
+```
+
+```{r}
+## Load data
+f = paste0(datadir, normalized_data_wide)
+mydata = read.table(f, header = TRUE, sep = "\t", as.is = TRUE)
+```
+
+## colname edit
+
+```{r}
+w = which( colnames(mydata) == "FOM3_Hip_total_BMD" )
+colnames(mydata)[w] = "FOM3_Hip_Total_BMD"
+```
+
+## Create Ever Smoked variable
+
+```{r}
+temp = mydata[,32:35]
+temp[temp<0] = NA
+w = which( apply(temp, 1, function(x){sum(x == 2, na.rm = TRUE)}) > 0 )
+mydata$ever_never_smoked[w] = "no"
+w = which( apply(temp, 1, function(x){sum(x == 1, na.rm = TRUE)}) > 0 )
+mydata$ever_never_smoked[w] = "yes"
+
+table(mydata$ever_never_smoked)
+sum(is.na(mydata$ever_never_smoked))
+```
+
+## Create Fracture Variable
+
+```{r}
+temp = mydata[,36:40]
+temp[temp<0] = NA
+###
+mydata$ever_fracture = NA
+### 2 are a NO
+w = which( apply(temp[, 1:4], 1, function(x){sum(x == 2, na.rm = TRUE)}) > 0 )
+mydata$ever_fracture[w] = "no"
+## 0 is a NO
+w = which(temp[,5] == 0)
+mydata$ever_fracture[w] = "no"
+##  All 1's are YES
+w = which( apply(temp, 1, function(x){ sum(x == 1, na.rm = TRUE) }) > 0 )
+mydata$ever_fracture[w] = "yes"
+
+table(mydata$ever_fracture)
+sum(is.na(mydata$ever_fracture))
+```
+
+```{r}
+x = mydata$ever_told_osteoperosis_2020
+x[x<0]=NA
+table(x)
+sum(is.na(x))
+```
+
+
+## How many individuals have VitD data in each clinic ?
+
+```{r}
+k1 = mydata$aln[which(mydata$VitDt_FOM1 > 0 )]
+length(k1) # 3228
+
+k2 = mydata$aln[which(mydata$VitDt_FOM2 > 0 )]
+length(k2) # 1733
+
+k3 = mydata$aln[which(mydata$VitDt_FOM3 > 0 )]
+length(k3) # 2127
+
+k4 = mydata$aln[which(mydata$VitDt_FOM4 > 0 )]
+length(k4) # 2091
+
+#######################################
+ids = unique( c(k1, k2, k3, k4) )
+length(ids)
+
+```
+## How many individuals have VitD Season Adjusted data in each clinic ?
+
+```{r}
+k1 = mydata$aln[which(mydata$FOM1_vitD_season_and_clinic_centered > 0 )]
+length(k1) # 3226
+k2 = mydata$aln[which(mydata$FOM2_vitD_season_and_clinic_centered > 0 )]
+length(k2) # 1727
+k3 = mydata$aln[which(mydata$FOM3_vitD_season_and_clinic_centered > 0 )]
+length(k3) # 2126
+k4 = mydata$aln[which(mydata$FOM4_vitD_season_and_clinic_centered > 0 )]
+length(k4) # 2087
+
+#######################################
+ids = unique( c(k1, k2, k3, k4) )
+length(ids)
+
+```
+
+
+## How many individuals have VitD Season Adjusted data in each clinic ?
+
+```{r}
+k1 = mydata$aln[which(mydata$FOM1_vitD_season_and_clinic_centered > 0 
+                      & mydata$FOM1_Hip_Total_BMD > 0)]
+k1 = as.character(k1)
+length(k1) # 3137
+k2 = mydata$aln[which(mydata$FOM2_vitD_season_and_clinic_centered > 0 
+                      & mydata$FOM2_Hip_Total_BMD > 0)]
+k2 = as.character(k2)
+length(k2) # 1656
+k3 = mydata$aln[which(mydata$FOM3_vitD_season_and_clinic_centered > 0 
+                      & mydata$FOM3_Hip_Total_BMD > 0)]
+k3 = as.character(k3)
+length(k3) # 2083
+k4 = mydata$aln[which(mydata$FOM4_vitD_season_and_clinic_centered > 0 
+                      & mydata$FOM4_Hip_Total_BMD > 0)]
+k4 = as.character(k4)
+length(k4) # 2034
+
+
+#############################
+ids = unique( c(k1, k2, k3, k4) )
+length(ids)
+```
+
+## How many unique IDs are there ?
+
+```{r}
+StudyIDs = sort( unique( c(k1, k2, k3, k4) ) )
+length(StudyIDs)
+```
+
+```{r}
+set.seed(260822)
+
+
+Sample_Clinic_ID = id_sample_pool(wdata = mydata, 
+                                  exposure = "vitD_season_and_clinic_centered", 
+                                  outcome = "Hip_Total_BMD",
+                                  id = "aln",
+                                  clinic_prefix = c("FOM1","FOM2","FOM3","FOM4") )
+
+dim(Sample_Clinic_ID)
+```
+
+```{r}
+table( Sample_Clinic_ID$clinic )
+```
+
+
+```{r}
+sdata = build_data_set(wdata = mydata, 
+                       id_sample_pool_df = Sample_Clinic_ID,
+                       clinic_specific_vars = c( "vitD_season_and_clinic_centered", 
+                                                 "Hip_Total_BMD", 
+                                                 "Hip_Troch_BMD", 
+                                                 "Hip_Wards_BMD",
+                                                 "Hip_Shaft_BMD",
+                                                 "Hip_Neck_BMD",
+                                                 "Hip_Upper_Neck_BMD",
+                                                 "Hip_Lower_Neck_BMD",
+                                                 "age", "bmi",
+                                                 "year_attended",
+                                                 "month_attended"),
+                       covariables = c( paste0("PC", 1:10), "pgs", 
+                                        "ever_never_smoked", 
+                                        "ever_fracture" , 
+                                        "ever_told_osteoperosis_2020",
+                                        "aln") )
+
+dim(sdata)
+```
+
+```{r}
+new_sdata = sdata[, c(27:28, 4, 3, 24, 23, 12, 1:2, 11:5, 25:26, 13:22)]
+```
+
+## Edit out the missing negative values
+
+```{r}
+w = which(new_sdata$ever_told_osteoperosis_2020 < 0 )
+if(length(w)>0){ new_sdata$ever_told_osteoperosis_2020[w] = NA  }
+```
+
+
+```{r}
+f = paste0(datadir, "working_data/compiled_long_analysis_dataset.txt")
+write.table(new_sdata, file = f, row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
+```
+
+
+
+```{r}
+f = paste0(datadir, "working_data/working_data_set_v2.txt")
+write.table(mydata, file = f, row.names = FALSE, col.names = TRUE, sep = "\t", quote = FALSE)
+```
+
+
+
+
