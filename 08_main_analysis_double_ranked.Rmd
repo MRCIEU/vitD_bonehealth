@@ -1,0 +1,168 @@
+---
+title: "Obs and MR Analyses"
+author: "David Hughes"
+date: "2022-09-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(patchwork)
+
+## Load Parameter Data
+source("parameters/pfile.txt")
+source("functions/stratified_MR.R")
+source("functions/summarize_stratified_MR.R")
+
+
+```
+
+
+```{r}
+## Load data
+f = paste0(datadir, normalized_data_wide_v2)
+mydata = read.table(f, header = TRUE, sep = "\t", as.is = TRUE)
+
+
+f = paste0(datadir, compiled_analysis_data)
+mydata_compiled = read.table(f, header = TRUE, sep = "\t", as.is = TRUE)
+
+```
+
+
+## exposure edit
+
+```{r}
+mydata$FOM1_vitD_nmol_per_l = mydata$FOM1_vitD_season_and_clinic_centered * 2.496
+mydata$FOM2_vitD_nmol_per_l = mydata$FOM2_vitD_season_and_clinic_centered * 2.496
+mydata$FOM3_vitD_nmol_per_l = mydata$FOM3_vitD_season_and_clinic_centered * 2.496
+mydata$FOM4_vitD_nmol_per_l = mydata$FOM4_vitD_season_and_clinic_centered * 2.496
+#######
+mydata_compiled$vitD_nmol_per_l = mydata_compiled$vitD_season_and_clinic_centered * 2.496
+```
+
+
+## What is the variance explained in VitD by the PGS in each clinic ?
+
+```{r}
+fit = lm(FOM1_vitD_season_and_clinic_centered ~ pgs, data = mydata)
+summary(fit)$r.sq
+
+fit = lm(FOM2_vitD_season_and_clinic_centered ~ pgs, data = mydata)
+summary(fit)$r.sq
+
+fit = lm(FOM3_vitD_season_and_clinic_centered ~ pgs, data = mydata)
+summary(fit)$r.sq
+
+fit = lm(FOM4_vitD_season_and_clinic_centered ~ pgs, data = mydata)
+summary(fit)$r.sq
+
+fit = lm(vitD_season_and_clinic_centered ~ pgs, data = mydata_compiled)
+summary(fit)$r.sq
+
+```
+
+# Updated DOUBLY-RANKED analysis 
+
+```{r}
+# install.packages("devtools")
+# devtools::install_github("amymariemason/SUMnlmr")
+library(SUMnlmr)
+```
+
+## Continuous Traits - BONE Mineral Density
+
+```{r}
+mycovars = as.matrix( mydata_compiled[, c("age_at", paste0("PC", 1:10) )] )
+
+bmd_DR_MR <- create_nlmr_summary(y = mydata_compiled$Hip_Total_BMD,   # outcome
+                               x = mydata_compiled$vitD_nmol_per_l,      # exposure
+                               g = mydata_compiled$pgs,               # genetic instrument
+                               covar = mycovars, # covariates
+                               family = "gaussian",   # outcome type gaussian/binomial
+                               strata_method = "ranked",
+                               controlsonly = FALSE,
+                               q = 5)                 # number of quantiles
+```
+
+
+```{r}
+bmd_DR_MR$summary %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+
+
+## Ever had a bone fracture
+
+```{r}
+table(mydata_compiled$ever_fracture)
+```
+
+```{r}
+## define factor levels
+mydata_compiled$ever_fracture = factor(mydata_compiled$ever_fracture, levels = c("no","yes"))
+
+
+fracture_DR_MR <-create_nlmr_summary(y = mydata_compiled$ever_fracture,   # outcome
+                               x = mydata_compiled$vitD_nmol_per_l,      # exposure
+                               g = mydata_compiled$pgs,               # genetic instrument
+                               covar = mycovars, # covariates
+                               family = "binomial",   # outcome type gaussian/binomial
+                               strata_method = "ranked",
+                               controlsonly = FALSE,
+                               q = 5)  
+
+```
+
+
+```{r}
+fracture_DR_MR$summary %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+
+## Ever been told you have osteoperosis
+
+```{r}
+table(mydata_compiled$ever_told_osteoperosis_2020)
+```
+
+```{r}
+mydata_compiled$ever_told_osteoperosis_2020 = as.character(mydata_compiled$ever_told_osteoperosis_2020)
+###
+w = which(mydata_compiled$ever_told_osteoperosis_2020 == "0")
+mydata_compiled$ever_told_osteoperosis_2020[w] = "no"
+
+##
+w = which(mydata_compiled$ever_told_osteoperosis_2020 == "1")
+mydata_compiled$ever_told_osteoperosis_2020[w] = "yes"
+
+##
+mydata_compiled$ever_told_osteoperosis_2020 = factor(mydata_compiled$ever_told_osteoperosis_2020, levels = c("no","yes"))
+
+```
+
+```{r}
+table(mydata_compiled$ever_told_osteoperosis_2020)
+```
+
+
+```{r}
+osteo_DR_MR <- create_nlmr_summary(y = mydata_compiled$ever_told_osteoperosis_2020,   # outcome
+                               x = mydata_compiled$vitD_nmol_per_l,      # exposure
+                               g = mydata_compiled$pgs,               # genetic instrument
+                               covar = mycovars, # covariates
+                               family = "binomial",   # outcome type gaussian/binomial
+                               strata_method = "ranked",
+                               controlsonly = FALSE,
+                               q = 5)  
+
+```
+
+
+
+```{r}
+osteo_DR_MR$summary %>% knitr::kable() %>% kableExtra::kable_classic()
+```
+
+
